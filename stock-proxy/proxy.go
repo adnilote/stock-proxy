@@ -1,4 +1,4 @@
-package stock_proxy
+package proxy
 
 // url := "https://www.alphavantage.co/query?apikey=7Z29L509PNF9IE24&function=TIME_SERIES_INTRADAY&interval=1min&outputsize=compact&symbol=amzn"
 
@@ -18,29 +18,33 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
+const (
+	REQLIMIT int64  = 5
+	ApiKey   string = "7Z29L509PNF9IE24"
+)
+
 type Proxy struct {
 	db       *MongoDB
 	av       *av.AvClient
 	counter  *counter.Counter
-	reqLimit int64
 	throttle chan struct{}
 	lg       *zap.Logger
 }
 
-func NewProxy(apiKey string, db *mgo.Collection, reqLimit int64) (*Proxy, error) {
+func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
 
 	h := &Proxy{
 		db:       &MongoDB{db: db},
-		av:       av.NewAvClient(apiKey),
+		av:       av.NewAvClient(ApiKey),
 		counter:  counter.NewCounter(60),
-		reqLimit: reqLimit,
 		throttle: make(chan struct{}),
+		lg:       lg,
 	}
 
 	// limits requests
 	go func() {
 		for {
-			if h.counter.Rate() < h.reqLimit {
+			if h.counter.Rate() < REQLIMIT {
 				h.throttle <- struct{}{}
 				h.counter.Incr()
 			}
@@ -58,8 +62,8 @@ func (p *Proxy) GetOHLCV(w http.ResponseWriter, url, ticker string) {
 
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		CaptureError(err, sentry.LevelError, map[string]interface{}{"counter": p.counter.Rate()})
-		// lg.Error("Error loading intraday series from server",
+		CaptureError(err, sentry.LevelError, p.lg, map[string]interface{}{"counter": p.counter.Rate()})
+		// p.lg.Error("Error loading intraday series from server",
 		// 	zap.Error(err),
 		// 	zap.Int("counter", int(p.counter.Rate())),
 		// )
@@ -71,22 +75,22 @@ func (p *Proxy) GetOHLCV(w http.ResponseWriter, url, ticker string) {
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		CaptureError(err, sentry.LevelError)
-		// lg.Error("Error reading response from server", zap.Error(err))
+		CaptureError(err, sentry.LevelError, p.lg)
+		// p.lg.Error("Error reading response from server", zap.Error(err))
 		return
 	}
 
 	// add record to db
 	err = p.db.Add(ticker, respBody)
 	if err != nil {
-		CaptureError(err, sentry.LevelError, map[string]interface{}{"ticker": ticker})
+		CaptureError(err, sentry.LevelError, p.lg, map[string]interface{}{"ticker": ticker})
 	}
 
 	// send response to client
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	w.Write(respBody)
-	lg.Info("send ticker to client", zap.String("ticker", ticker), zap.Int("counter", int(p.counter.Rate())))
+	p.lg.Info("send ticker to client", zap.String("ticker", ticker), zap.Int("counter", int(p.counter.Rate())))
 
 }
 
@@ -128,16 +132,16 @@ func (p *Proxy) GetOHLCVAsync(w http.ResponseWriter, r *http.Request) {
 	// check if request amount in last 1 min is not exceed limit
 	if !p.try() {
 		http.Error(w, "Request decline. Limit excedeed.", http.StatusTooManyRequests)
-		lg.Info("Limit excedeed.", zap.Int("count", int(p.counter.Rate())))
+		p.lg.Info("Limit excedeed.", zap.Int("count", int(p.counter.Rate())))
 		return
 	}
 
 	// handle request
-	p.GetOHLCV(w, path, r.URL.Query().Get(av.av.QuerySymbol))
+	p.GetOHLCV(w, path, r.URL.Query().Get(av.QuerySymbol))
 }
 
 // History returns requests by ticker
-func (h *Proxy) GetHistory(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	ticker := r.URL.Query().Get(av.QuerySymbol)
 	if ticker == "" {
@@ -146,16 +150,16 @@ func (h *Proxy) GetHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get record from db
-	item, err := h.db.Get(ticker)
+	item, err := p.db.Get(ticker)
 	if err != nil {
 		if err == mgo.ErrNotFound {
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte("No history for " + ticker))
-			lg.Info("Return no history", zap.Error(err), zap.String("ticker", ticker))
+			p.lg.Info("Return no history", zap.Error(err), zap.String("ticker", ticker))
 		} else {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			// lg.Error("Return err to client", zap.Error(err), zap.String("ticker", ticker))
-			CaptureError(err, sentry.LevelError, map[string]interface{}{"ticker": ticker})
+			// p.lg.Error("Return err to client", zap.Error(err), zap.String("ticker", ticker))
+			CaptureError(err, sentry.LevelError, p.lg, map[string]interface{}{"ticker": ticker})
 		}
 		return
 	}
@@ -167,5 +171,5 @@ func (h *Proxy) GetHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 
-	// lg.Debug("Return history", zap.String("ticker", ticker))
+	// p.lg.Debug("Return history", zap.String("ticker", ticker))
 }

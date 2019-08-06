@@ -15,7 +15,7 @@ const (
 	ApiKey   string = "7Z29L509PNF9IE24"
 	REQLIMIT int64  = 5
 	DSN      string = "https://91d94d4b63c0459cba56427529cc9a09@sentry.io/1519981"
-	DbURL    string = "mongodb://mongo:27017"
+	DbURL    string = "mongodb://mongo:27017" //mongo
 )
 
 // NewLogger initiates zap.logger, which send log to logs/filename

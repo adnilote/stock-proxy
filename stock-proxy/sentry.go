@@ -1,12 +1,25 @@
-package stock_proxy
+package proxy
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap"
 )
+
+func NewLogger(outputPath []string) (*zap.Logger, error) {
+	for _, path := range outputPath {
+		if path != "stdout" {
+			os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+		}
+	}
+
+	cfg := zap.NewDevelopmentConfig()
+	cfg.OutputPaths = outputPath
+	return cfg.Build()
+}
 
 func ConfigureSentry(dsn string) {
 	// dsn := config.GetSentryDSN()
@@ -24,7 +37,7 @@ func ConfigureSentry(dsn string) {
 }
 
 // CaptureException sends to Sentry general exception info with some extra provided detail (like user email, claim url etc)
-func CaptureError(err error, level sentry.Level, params ...map[string]interface{}) {
+func CaptureError(err error, level sentry.Level, lg *zap.Logger, params ...map[string]interface{}) {
 	sentry.WithScope(func(scope *sentry.Scope) {
 		var extra map[string]interface{}
 		if len(params) > 0 {

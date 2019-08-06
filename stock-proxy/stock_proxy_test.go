@@ -1,4 +1,4 @@
-package stock_proxy
+package proxy
 
 import (
 	"encoding/json"
@@ -13,8 +13,8 @@ import (
 
 	"strings"
 
-	sentry "github.com/getsentry/sentry-go"
-	"go.uber.org/zap"
+	av "github.com/adnilote/stock-proxy/av-client"
+
 	mgo "gopkg.in/mgo.v2"
 )
 
@@ -43,21 +43,20 @@ func init() {
 	}
 	// init zap logger
 	var err error
-	lg, err = NewLogger([]string{
+	lg, err := NewLogger([]string{
 		"proxy.log",
 	})
 	if err != nil {
-		CaptureError(err, sentry.LevelFatal)
+
 		log.Fatalf("zap.NewDevelopment() failed, error: %v.", err)
 	}
 
 	// init sentry for errors
-	ConfigureSentry(DSN)
 
 	// connect to db
 	sess, err := mgo.Dial(dbURL)
 	if err != nil {
-		CaptureError(err, sentry.LevelFatal)
+		log.Fatalf("Error connecting to mongoDB: %v", err)
 	}
 
 	collection := sess.DB("av").C("timeseries")
@@ -65,14 +64,14 @@ func init() {
 	// get amount of records in db
 	n, err := collection.Count()
 	if err != nil {
-		CaptureError(err, sentry.LevelError)
+		log.Fatalf("Error count in mongoDB: %v", err)
 	}
-	lg.Info("Start db", zap.Int("collection_count", n))
+	log.Printf("Start db collection_count = %d", n)
 
 	// handler
-	handler, err = NewProxy(ApiKey, collection, REQLIMIT)
+	handler, err = NewProxy(collection, lg)
 	if err != nil {
-		CaptureError(err, sentry.LevelFatal)
+		log.Fatalf("Error in NewProxy: %v", err)
 	}
 }
 
@@ -81,45 +80,45 @@ func TestGetOHLCV(t *testing.T) {
 	cases := []TestCaseM{
 		TestCaseM{
 			params: map[string]string{
-				QueryFunction: "TIME_SERIES_DAILY_ADJUSTED",
-				QuerySymbol:   "amzn",
+				av.QueryFunction: "TIME_SERIES_DAILY_ADJUSTED",
+				av.QuerySymbol:   "amzn",
 			},
 			info: "Daily Time Series with Splits and Dividend Events",
 		},
 		TestCaseM{
 			params: map[string]string{
-				QueryFunction: "TIME_SERIES_DAILY_ADJUSTED",
-				QuerySymbol:   "amzn",
-				QueryDataType: "csv",
+				av.QueryFunction: "TIME_SERIES_DAILY_ADJUSTED",
+				av.QuerySymbol:   "amzn",
+				av.QueryDataType: "csv",
 			},
 		},
 		TestCaseM{
 			params: map[string]string{
-				QueryFunction: "TIME_SERIES_INTRADAY",
-				QueryInterval: "5min",
-				QuerySymbol:   "amzn",
+				av.QueryFunction: "TIME_SERIES_INTRADAY",
+				av.QueryInterval: "5min",
+				av.QuerySymbol:   "amzn",
 			},
 			info: "Intraday (5min) open, high, low, close prices and volume",
 		},
 		TestCaseM{
 			params: map[string]string{
-				QueryFunction:   "TIME_SERIES_INTRADAY",
-				QueryInterval:   "1min",
-				QuerySymbol:     "msft",
-				QueryOutputSize: "full",
+				av.QueryFunction:   "TIME_SERIES_INTRADAY",
+				av.QueryInterval:   "1min",
+				av.QuerySymbol:     "msft",
+				av.QueryOutputSize: "full",
 			},
 			info: "Intraday (1min) open, high, low, close prices and volume",
 		},
 		TestCaseM{
 			params: map[string]string{
-				QueryFunction: "TIME_SERIES_INTRADAY",
-				QuerySymbol:   "amzn",
+				av.QueryFunction: "TIME_SERIES_INTRADAY",
+				av.QuerySymbol:   "amzn",
 			},
 			statusCode: http.StatusBadRequest,
 		},
 		TestCaseM{
 			params: map[string]string{
-				QueryFunction: "TIME_SERIES_DAILY_ADJUSTED",
+				av.QueryFunction: "TIME_SERIES_DAILY_ADJUSTED",
 			},
 			statusCode: http.StatusBadRequest,
 		},
@@ -153,14 +152,14 @@ func TestGetOHLCV(t *testing.T) {
 			break
 		}
 
-		if _, ok := cs.params[QueryDataType]; !ok {
-			cs.params[QueryDataType] = "json"
+		if _, ok := cs.params[av.QueryDataType]; !ok {
+			cs.params[av.QueryDataType] = "json"
 		}
 
 		gotContentType := w.Header().Get("Content-Type")
-		if gotContentType != mimeType[cs.params[QueryDataType]] {
+		if gotContentType != mimeType[cs.params[av.QueryDataType]] {
 			t.Fatalf("[%d] wrong Content-Type: got %s, expected %s",
-				caseNum, gotContentType, mimeType[cs.params[QueryDataType]])
+				caseNum, gotContentType, mimeType[cs.params[av.QueryDataType]])
 		}
 
 		resp := w.Result()
@@ -186,27 +185,27 @@ func TestGetOHLCV(t *testing.T) {
 			}
 
 			symbol := item["Meta Data"].(map[string]interface{})["2. Symbol"].(string)
-			if symbol != cs.params[QuerySymbol] {
+			if symbol != cs.params[av.QuerySymbol] {
 				t.Errorf("[%d] wrong Meta Data Symbol: got %s, expected %s",
-					caseNum, symbol, cs.params[QuerySymbol])
+					caseNum, symbol, cs.params[av.QuerySymbol])
 			}
 
 			if item["Meta Data"].(map[string]interface{})["4. Interval"] != nil {
 				interval := item["Meta Data"].(map[string]interface{})["4. Interval"].(string)
-				if _, ok := cs.params[QueryInterval]; ok {
-					if interval != cs.params[QueryInterval] {
+				if _, ok := cs.params[av.QueryInterval]; ok {
+					if interval != cs.params[av.QueryInterval] {
 						t.Errorf("[%d] wrong Meta Data Interval: got %s, expected %s",
-							caseNum, interval, cs.params[QueryInterval])
+							caseNum, interval, cs.params[av.QueryInterval])
 					}
 				}
 			}
 
 			if item["Meta Data"].(map[string]interface{})["5. Output Size"] != nil {
 				size := item["Meta Data"].(map[string]interface{})["5. Output Size"].(string)
-				if _, ok := cs.params[QueryOutputSize]; ok {
-					if strings.Contains(size, cs.params[QueryInterval]) {
+				if _, ok := cs.params[av.QueryOutputSize]; ok {
+					if strings.Contains(size, cs.params[av.QueryInterval]) {
 						t.Errorf("[%d] wrong Meta Data Output Size: got %s, expected %s",
-							caseNum, size, cs.params[QueryOutputSize])
+							caseNum, size, cs.params[av.QueryOutputSize])
 					}
 				}
 			}
@@ -222,8 +221,8 @@ func TestGetOHLCVSyncLimit(t *testing.T) {
 	time.Sleep(time.Minute)
 
 	params := url.Values{}
-	params.Set(QueryFunction, "TIME_SERIES_DAILY_ADJUSTED")
-	params.Set(QuerySymbol, "amzn")
+	params.Set(av.QueryFunction, "TIME_SERIES_DAILY_ADJUSTED")
+	params.Set(av.QuerySymbol, "amzn")
 	u, _ := url.ParseRequestURI(proxyAdd)
 	u.Path = "/sync/"
 	u.RawQuery = params.Encode()
@@ -254,8 +253,8 @@ func TestGetOHLCVAsyncLimit(t *testing.T) {
 	time.Sleep(time.Minute)
 
 	params := url.Values{}
-	params.Set(QueryFunction, "TIME_SERIES_DAILY_ADJUSTED")
-	params.Set(QuerySymbol, "amzn")
+	params.Set(av.QueryFunction, "TIME_SERIES_DAILY_ADJUSTED")
+	params.Set(av.QuerySymbol, "amzn")
 	u, _ := url.ParseRequestURI(proxyAdd)
 	u.Path = "/async/"
 	u.RawQuery = params.Encode()

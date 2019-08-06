@@ -13,16 +13,49 @@ type OHLCV struct {
 	Close     float64
 	Volume    float64
 }
+
+type Request []OHLCV
+
 type Item struct {
 	Id     bson.ObjectId `json:"id" bson:"_id"`
 	Ticker string        `json:"ticker" bson:"ticker"`
 	Ohlcv  []bson.Binary `json:"ohlcv" bson:"ohlcv"`
+	// Ohlcv []Request
+}
+type MetaData struct {
+	Info       string `json:"1. Information" bson: "info"`
+	Symbol     string `json:"2. Symbol" bson: "symbol"`
+	Refreshed  string `json:"3. Last Refreshed" bson: "refreshed"`
+	Intervel   string `json:"4. Interval" bson: "interval"`
+	OutputSize string `json:"5. Output Size" bson: "size"`
+	TimeZone   string `json:"6. Time Zone" bson: "time"`
 }
 
 type MongoDB struct {
 	db *mgo.Collection
 }
 
+// func (m *MongoDB) AddVal(key string, rawVal []byte, format string) error {
+// 	switch format {
+// 	case "json":
+// 		var item map[string]interface{}
+// 		err := json.Unmarshal(rawVal, &item)
+// 		if err != nil {
+
+// 		}
+// 		if _, ok := item["Meta Data"]; ok {
+// 			h := md5.New()
+// 			h.Write(item["Meta Data"].([]byte))
+// 			bs := h.Sum(nil)
+// 		}
+// 	case "csv":
+// 		ts, err := parseTimeSeriesData(bytes.NewReader(rawVal))
+
+// 	default:
+// 		return fmt.Errorf("Unknown format")
+// 	}
+// 	return nil
+// }
 func (m *MongoDB) Add(key string, val []byte) error {
 	record := bson.M{
 		"ticker": key,

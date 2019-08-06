@@ -1,5 +1,5 @@
 
-FROM golang:1.12.7-alpine3.9 as builder
+FROM golang:1.11-alpine as builder
 
 RUN mkdir /proxy
 ADD . /proxy

@@ -1,0 +1,54 @@
+   "Meta Data": {
+        "1. Information": "Daily Prices (open, high, low, close) and Volumes",
+        "2. Symbol": "amzn",
+        "3. Last Refreshed": "2019-08-05",
+        "4. Output Size": "Compact",
+        "5. Time Zone": "US/Eastern"
+    },
+    "Time Series (Daily)": {
+        "2019-08-05": {
+            "1. open": "1770.2200",
+            "2. high": "1788.6700",
+            "3. low": "1748.7800",
+            "4. close": "1765.1300",
+            "5. volume": "6058212"
+        },
+        "2019-08-02": {
+            "1. open": "1845.0700",
+            "2. high": "1846.3600",
+            "3. low": "1808.0200",
+            "4. close": "1823.2400",
+            "5. volume": "4956225"
+        },
+
+
+"Meta Data": {
+        "1. Information": "Intraday (1min) open, high, low, close prices and volume",
+        "2. Symbol": "amzn",
+        "3. Last Refreshed": "2019-08-05 16:00:00",
+        "4. Interval": "1min",
+        "5. Output Size": "Compact",
+        "6. Time Zone": "US/Eastern"
+    },
+    "Time Series (1min)": {
+        "2019-08-05 16:00:00": {
+            "1. open": "1770.3300",
+            "2. high": "1771.1300",
+            "3. low": "1764.7000",
+            "4. close": "1765.2800",
+            "5. volume": "90816"
+        },
+        "2019-08-05 15:59:00": {
+            "1. open": "1773.1100",
+            "2. high": "1773.1100",
+            "3. low": "1769.9900",
+            "4. close": "1770.0800",
+            "5. volume": "54080"
+        },
+
+
+timestamp,open,high,low,close,volume
+2019-08-02 10:15:00,1825.6500,1828.6200,1822.0100,1827.6300,82159
+2019-08-02 10:10:00,1827.5100,1829.5800,1822.6000,1826.0804,69863
+2019-08-02 10:05:00,1829.1899,1834.0000,1826.0500,1826.0500,57294
+2019-08-02 10:00:00,1827.5100,1830.7758,1823.3300,1829.6176,123174

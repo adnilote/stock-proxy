@@ -1,4 +1,4 @@
-package stock_proxy
+package proxy
 
 import (
 	mgo "gopkg.in/mgo.v2"
