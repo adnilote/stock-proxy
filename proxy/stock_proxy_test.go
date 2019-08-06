@@ -23,7 +23,7 @@ var handler *Proxy
 
 const (
 	proxyAdd string = "http://127.0.0.1:8082"
-	dbURL    string = "mongodb://mongo:27010"
+	dbURL    string = "mongodb://mongo:27017" //mongo or 127.0.0.1
 )
 
 var mimeType map[string]string

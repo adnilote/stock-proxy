@@ -7,22 +7,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// func ConfigureSentry(dsn string) {
-// 	// dsn := config.GetSentryDSN()
-// 	// if dsn == "" {
-// 	// 	return
-// 	// }
-
-// 	err := sentry.Init(sentry.ClientOptions{
-// 		Dsn:              dsn,
-// 		AttachStacktrace: true,
-// 	})
-// 	if err != nil {
-// 		log.Printf("sentry initialization failed: %v", err)
-// 	}
-// }
-
-// CaptureError sends to Sentry general exception info with some extra provided detail (like user email, claim url etc)
+// CaptureError sends to Sentry general exception info
+// with sentry.Level and with some extra provided detail in params.
+// Also write into log.
 func CaptureError(err error, level sentry.Level, lg *zap.Logger, params ...map[string]interface{}) {
 	sentry.WithScope(func(scope *sentry.Scope) {
 		var extra map[string]interface{}

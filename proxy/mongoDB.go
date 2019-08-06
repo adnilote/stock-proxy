@@ -5,6 +5,7 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+// OHLCV
 type OHLCV struct {
 	Timestamp int32
 	Open      float64
@@ -13,16 +14,21 @@ type OHLCV struct {
 	Close     float64
 	Volume    float64
 }
+
+// Item struct is a document in mongoDB
 type Item struct {
-	Id     bson.ObjectId `json:"id" bson:"_id"`
+	ID     bson.ObjectId `json:"id" bson:"_id"`
 	Ticker string        `json:"ticker" bson:"ticker"`
 	Ohlcv  []bson.Binary `json:"ohlcv" bson:"ohlcv"`
 }
 
+// MongoDB instance of mongoDB, which can
+// add and get documents to db
 type MongoDB struct {
 	db *mgo.Collection
 }
 
+// Add adds val by key to db
 func (m *MongoDB) Add(key string, val []byte) error {
 	record := bson.M{
 		"ticker": key,
@@ -53,8 +59,8 @@ func (m *MongoDB) Add(key string, val []byte) error {
 	return nil
 }
 
+// Get return record from db by key
 func (m *MongoDB) Get(key string) (*Item, error) {
-	// Get record from db
 	item := Item{}
 	err := m.db.Find(bson.M{"ticker": key}).One(&item)
 	if err != nil {

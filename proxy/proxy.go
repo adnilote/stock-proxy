@@ -2,10 +2,8 @@ package proxy
 
 // url := "https://www.alphavantage.co/query?apikey=7Z29L509PNF9IE24&function=TIME_SERIES_INTRADAY&interval=1min&outputsize=compact&symbol=amzn"
 
-// log
 // history not duplicate
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -35,7 +33,7 @@ type Proxy struct {
 }
 
 // NewProxy return proxy instance. Required mongoDB collection db
-// and zap logger
+// and zap logger.
 func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
 
 	h := &Proxy{
@@ -62,26 +60,19 @@ func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
 func (p *Proxy) getOHLCV(w http.ResponseWriter, url, ticker string) {
 
 	// send request to server
-	// resp, err := p.av.Get(url)
 	resp, err := p.av.Conn.Get(url)
 
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		CaptureError(err, sentry.LevelError, p.lg, map[string]interface{}{"counter": p.counter.Rate()})
-		// p.lg.Error("Error loading intraday series from server",
-		// 	zap.Error(err),
-		// 	zap.Int("counter", int(p.counter.Rate())),
-		// )
 		return
 	}
-	fmt.Println(resp.Header)
 	// read response
 	defer resp.Body.Close()
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		CaptureError(err, sentry.LevelError, p.lg)
-		// p.lg.Error("Error reading response from server", zap.Error(err))
 		return
 	}
 
@@ -100,7 +91,9 @@ func (p *Proxy) getOHLCV(w http.ResponseWriter, url, ticker string) {
 }
 
 // GetOHLCVSync sends ohlcv in minute syncroniously,
-// i.e. client blocks until he got response
+// i.e. client blocks until he got response.
+//
+// Example: http://127.0.0.1:8082/sync/?function=TIME_SERIES_INTRADAY&interval=1min&outputsize=compact&symbol=amzn
 func (p *Proxy) GetOHLCVSync(w http.ResponseWriter, r *http.Request) {
 
 	// validate query params and prepare query to go to server
@@ -127,6 +120,8 @@ func (p *Proxy) try() bool {
 
 // GetOHLCVAsync immediately returns response, if limit not exceeded,
 // otherwise returns "TooManyRequests" and close connection.
+//
+// Example: http://127.0.0.1:8082/async/?function=TIME_SERIES_INTRADAY&interval=1min&outputsize=compact&symbol=amzn
 func (p *Proxy) GetOHLCVAsync(w http.ResponseWriter, r *http.Request) {
 	path, err := p.av.URL(r.URL.Query())
 	if err != nil {
@@ -146,6 +141,8 @@ func (p *Proxy) GetOHLCVAsync(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetHistory returns requests by ticker
+//
+// Example: http://192.168.99.100:8082/history/?symbol=amzn
 func (p *Proxy) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	ticker := r.URL.Query().Get(av.QuerySymbol)
@@ -175,6 +172,4 @@ func (p *Proxy) GetHistory(w http.ResponseWriter, r *http.Request) {
 		w.Write(i.Data)
 	}
 	w.WriteHeader(http.StatusOK)
-
-	// p.lg.Debug("Return history", zap.String("ticker", ticker))
 }

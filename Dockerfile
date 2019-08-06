@@ -1,5 +1,5 @@
 
-FROM golang:1.11-alpine as builder
+FROM golang:1-alpine3.10 as builder
 
 RUN mkdir /proxy
 ADD . /proxy
@@ -14,5 +14,5 @@ RUN go build -o /out/runme
 
 FROM alpine:3.9 as release
 COPY --from=builder /out/ .
-
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 CMD ["/runme"]  
