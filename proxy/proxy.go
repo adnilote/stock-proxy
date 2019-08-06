@@ -19,10 +19,13 @@ import (
 )
 
 const (
-	REQLIMIT int64  = 5
-	ApiKey   string = "7Z29L509PNF9IE24"
+	// REQLIMIT amount of request per minute
+	REQLIMIT int64 = 5
+	// APIKey for Alpha Vantage
+	APIKey string = "7Z29L509PNF9IE24"
 )
 
+// Proxy which limits clients request by REQLIMIT
 type Proxy struct {
 	db       *MongoDB
 	av       *av.AvClient
@@ -31,11 +34,13 @@ type Proxy struct {
 	lg       *zap.Logger
 }
 
+// NewProxy return proxy instance. Required mongoDB collection db
+// and zap logger
 func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
 
 	h := &Proxy{
 		db:       &MongoDB{db: db},
-		av:       av.NewAvClient(ApiKey),
+		av:       av.NewAvClient(APIKey),
 		counter:  counter.NewCounter(60),
 		throttle: make(chan struct{}),
 		lg:       lg,
@@ -54,7 +59,7 @@ func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
 	return h, nil
 }
 
-func (p *Proxy) GetOHLCV(w http.ResponseWriter, url, ticker string) {
+func (p *Proxy) getOHLCV(w http.ResponseWriter, url, ticker string) {
 
 	// send request to server
 	// resp, err := p.av.Get(url)
@@ -94,7 +99,7 @@ func (p *Proxy) GetOHLCV(w http.ResponseWriter, url, ticker string) {
 
 }
 
-// TimeSeriesSync sends ohlcv in minute syncroniously,
+// GetOHLCVSync sends ohlcv in minute syncroniously,
 // i.e. client blocks until he got response
 func (p *Proxy) GetOHLCVSync(w http.ResponseWriter, r *http.Request) {
 
@@ -108,19 +113,19 @@ func (p *Proxy) GetOHLCVSync(w http.ResponseWriter, r *http.Request) {
 	<-p.throttle
 
 	// handle request
-	p.GetOHLCV(w, path, r.URL.Query().Get(av.QuerySymbol))
+	p.getOHLCV(w, path, r.URL.Query().Get(av.QuerySymbol))
 }
 
-func (h *Proxy) try() bool {
+func (p *Proxy) try() bool {
 	select {
-	case <-h.throttle:
+	case <-p.throttle:
 		return true
 	default:
 		return false
 	}
 }
 
-// TimeSeriesAsync immediately returns response, if limit not exceeded,
+// GetOHLCVAsync immediately returns response, if limit not exceeded,
 // otherwise returns "TooManyRequests" and close connection.
 func (p *Proxy) GetOHLCVAsync(w http.ResponseWriter, r *http.Request) {
 	path, err := p.av.URL(r.URL.Query())
@@ -137,10 +142,10 @@ func (p *Proxy) GetOHLCVAsync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// handle request
-	p.GetOHLCV(w, path, r.URL.Query().Get(av.QuerySymbol))
+	p.getOHLCV(w, path, r.URL.Query().Get(av.QuerySymbol))
 }
 
-// History returns requests by ticker
+// GetHistory returns requests by ticker
 func (p *Proxy) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	ticker := r.URL.Query().Get(av.QuerySymbol)

@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	av "github.com/adnilote/stock-proxy/av-client"
+	"go.uber.org/zap"
 
 	mgo "gopkg.in/mgo.v2"
 )
@@ -41,17 +42,14 @@ func init() {
 		"json": "application/json",
 		"csv":  "application/x-download",
 	}
-	// init zap logger
-	var err error
-	lg, err := NewLogger([]string{
-		"proxy.log",
-	})
-	if err != nil {
 
+	// init zap logger
+	cfg := zap.NewDevelopmentConfig()
+	cfg.OutputPaths = []string{"stdout"}
+	lg, err := cfg.Build()
+	if err != nil {
 		log.Fatalf("zap.NewDevelopment() failed, error: %v.", err)
 	}
-
-	// init sentry for errors
 
 	// connect to db
 	sess, err := mgo.Dial(dbURL)
