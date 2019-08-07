@@ -65,7 +65,7 @@ func (m *MongoDB) Add(key string, val []byte) error {
 // Get return record from db by key
 func (m *MongoDB) Get(key string) (*Item, error) {
 	item := Item{}
-	err := m.db.Find(bson.M{"ticker": key}).One(&item)
+	err := m.db.Find(bson.M{"ticker": strings.ToUpper(key)}).One(&item)
 	if err != nil {
 		return nil, err
 	}

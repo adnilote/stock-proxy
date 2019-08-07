@@ -52,7 +52,11 @@ type Task struct {
 
 // NewProxy return proxy instance. Required mongoDB collection db
 // and zap logger.
-func NewProxy(db *mgo.Collection, lg *zap.Logger, reqLeft prometheus.Gauge) (*Proxy, error) {
+func NewProxy(db *mgo.Collection, lg *zap.Logger, reqLeftAr ...prometheus.Gauge) (*Proxy, error) {
+	var reqLeft prometheus.Gauge
+	if len(reqLeftAr) == 1 {
+		reqLeft = reqLeftAr[0]
+	}
 
 	p := &Proxy{
 		db:      &MongoDB{db: db},
