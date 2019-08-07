@@ -6,9 +6,9 @@ package proxy
 import (
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	av "github.com/adnilote/stock-proxy/av-client"
-	counter "github.com/adnilote/stock-proxy/rate-counter"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/getsentry/sentry-go"
@@ -17,65 +17,89 @@ import (
 	mgo "gopkg.in/mgo.v2"
 )
 
+var (
+// MaxQueue = os.Getenv("MAX_QUEUE")
+)
+
 const (
 	// REQLIMIT amount of request per minute
-	REQLIMIT int64 = 5
+	REQLIMIT int = 5
 	// APIKey for Alpha Vantage
 	APIKey string = "7Z29L509PNF9IE24"
+	// MaxQueue = max amount of tasks in queque
+	MaxQueue int = 10
 )
 
 // Proxy which limits clients request by REQLIMIT
 type Proxy struct {
-	db       *MongoDB
-	av       *av.AvClient
-	counter  *counter.Counter
-	throttle chan struct{}
-	lg       *zap.Logger
-	reqLeft  prometheus.Gauge
+	db *MongoDB
+	av *av.AvClient
+
+	lg      *zap.Logger
+	reqLeft prometheus.Gauge
+	tasks   chan *Task
+}
+
+// Task is a request from client, which is sent to workers.
+type Task struct {
+	w      http.ResponseWriter
+	url    string
+	ticker string
+	out    chan struct{}
+	// snedClient true - will write response to w
+	sendClient bool
 }
 
 // NewProxy return proxy instance. Required mongoDB collection db
 // and zap logger.
 func NewProxy(db *mgo.Collection, lg *zap.Logger, reqLeft prometheus.Gauge) (*Proxy, error) {
 
-	h := &Proxy{
-		db:       &MongoDB{db: db},
-		av:       av.NewAvClient(APIKey),
-		counter:  counter.NewCounter(60),
-		throttle: make(chan struct{}),
-		lg:       lg,
-		reqLeft:  reqLeft,
+	p := &Proxy{
+		db:      &MongoDB{db: db},
+		av:      av.NewAvClient(APIKey),
+		lg:      lg,
+		reqLeft: reqLeft,
 	}
 
-	// limits requests
-	go func() {
-		for {
-			if h.counter.Rate() < REQLIMIT {
-				h.throttle <- struct{}{}
-				h.counter.Incr()
-				reqLeft.Set(float64(5 - h.counter.Rate()))
-			}
-		}
-	}()
+	p.tasks = make(chan *Task, MaxQueue)
 
-	return h, nil
+	for i := 0; i < REQLIMIT; i++ {
+		go func() {
+			for {
+				select {
+				case task := <-p.tasks:
+					p.getOHLCV(task.w, task.url, task.ticker, task.sendClient)
+					if task.sendClient {
+						task.out <- struct{}{}
+					}
+					time.Sleep(time.Minute)
+				}
+			}
+		}()
+	}
+
+	return p, nil
 }
 
-func (p *Proxy) getOHLCV(w http.ResponseWriter, url, ticker string) {
+func (p *Proxy) getOHLCV(w http.ResponseWriter, url, ticker string, sendClient bool) {
 
 	// send request to server
 	resp, err := p.av.Conn.Get(url)
 
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		CaptureError(err, sentry.LevelError, p.lg, map[string]interface{}{"counter": p.counter.Rate()})
+		if sendClient {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		CaptureError(err, sentry.LevelError, p.lg) //map[string]interface{}{"counter": p.counter.Rate()}
 		return
 	}
 	// read response
 	defer resp.Body.Close()
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		if sendClient {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		CaptureError(err, sentry.LevelError, p.lg)
 		return
 	}
@@ -85,12 +109,14 @@ func (p *Proxy) getOHLCV(w http.ResponseWriter, url, ticker string) {
 	if err != nil {
 		CaptureError(err, sentry.LevelError, p.lg, map[string]interface{}{"ticker": ticker})
 	}
+	p.lg.Debug("Write response to db", zap.String("ticker", ticker))
 
 	// send response to client
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	w.Write(respBody)
-	p.lg.Info("send ticker to client", zap.String("ticker", ticker), zap.Int("counter", int(p.counter.Rate())))
+	if sendClient {
+		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+		w.Write(respBody)
+		p.lg.Debug("send ticker to client", zap.String("ticker", ticker)) //zap.Int("counter", int(p.counter.Rate()))
+	}
 
 }
 
@@ -106,16 +132,26 @@ func (p *Proxy) GetOHLCVSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// block if exceed limit
-	<-p.throttle
 
-	// handle request
-	p.getOHLCV(w, path, r.URL.Query().Get(av.QuerySymbol))
+	// send to workers
+	task := Task{
+		w:          w,
+		url:        path,
+		ticker:     r.URL.Query().Get(av.QuerySymbol),
+		out:        make(chan struct{}),
+		sendClient: true,
+	}
+	// blocks if exceed limit
+	p.tasks <- &task
+
+	// wait for request to finish
+	<-task.out
 }
 
-func (p *Proxy) try() bool {
+// try returns true if task queque is not full
+func (p *Proxy) try(task *Task) bool {
 	select {
-	case <-p.throttle:
+	case p.tasks <- task:
 		return true
 	default:
 		return false
@@ -133,15 +169,20 @@ func (p *Proxy) GetOHLCVAsync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// check if request amount in last 1 min is not exceed limit
-	if !p.try() {
-		http.Error(w, "Request decline. Limit excedeed.", http.StatusTooManyRequests)
-		p.lg.Info("Limit excedeed.", zap.Int("count", int(p.counter.Rate())))
+	// send to request workers
+	task := Task{
+		w:          w,
+		url:        path,
+		ticker:     r.URL.Query().Get(av.QuerySymbol),
+		out:        make(chan struct{}),
+		sendClient: false,
+	}
+	if !p.try(&task) {
+		http.Error(w, "Try later", http.StatusTooManyRequests)
 		return
 	}
 
-	// handle request
-	p.getOHLCV(w, path, r.URL.Query().Get(av.QuerySymbol))
+	w.Write([]byte("OK"))
 }
 
 // GetHistory returns requests by ticker

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/adnilote/stock-proxy/proxy"
+
 	"github.com/getsentry/sentry-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -18,6 +19,13 @@ const (
 	// DSN sentry error monitoring
 	DSN string = "https://91d94d4b63c0459cba56427529cc9a09@sentry.io/1519981"
 )
+
+var lg *zap.Logger
+
+var addr = flag.String("listen-address", ":8082",
+								"The address to listen on for HTTP requests.")
+var dbaddr = flag.String("mongo-address", "mongo:27017", // mongo or 127.0.0.1
+	"The address to connect to mongo.")
 
 // NewLogger initiates zap.logger, which send log to logs/filename
 // and stdout
@@ -32,13 +40,6 @@ func NewLogger(outputPath []string) (*zap.Logger, error) {
 	cfg.OutputPaths = outputPath
 	return cfg.Build()
 }
-
-var lg *zap.Logger
-
-var addr = flag.String("listen-address", ":8082",
-	"The address to listen on for HTTP requests.")
-var dbaddr = flag.String("mongo-address", "mongo:27017", // mongo or 127.0.0.1
-	"The address to connect to mongo.")
 
 func main() {
 	flag.Parse()
@@ -64,7 +65,7 @@ func main() {
 	prometheus.MustRegister(reqLeft)
 
 	// connect to db
-	sess, err := mgo.Dial("mongodb://" + *dbaddr) 
+	sess, err := mgo.Dial("mongodb://" + *dbaddr)
 	if err != nil {
 		CaptureError(err, sentry.LevelFatal)
 	}

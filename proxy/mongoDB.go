@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"strings"
+
 	mgo "gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -30,6 +32,7 @@ type MongoDB struct {
 
 // Add adds val by key to db
 func (m *MongoDB) Add(key string, val []byte) error {
+	key = strings.ToUpper(key)
 	record := bson.M{
 		"ticker": key,
 	}
