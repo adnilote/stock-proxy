@@ -9,6 +9,7 @@ import (
 
 	av "github.com/adnilote/stock-proxy/av-client"
 	counter "github.com/adnilote/stock-proxy/rate-counter"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/getsentry/sentry-go"
 
@@ -30,11 +31,12 @@ type Proxy struct {
 	counter  *counter.Counter
 	throttle chan struct{}
 	lg       *zap.Logger
+	reqLeft  prometheus.Gauge
 }
 
 // NewProxy return proxy instance. Required mongoDB collection db
 // and zap logger.
-func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
+func NewProxy(db *mgo.Collection, lg *zap.Logger, reqLeft prometheus.Gauge) (*Proxy, error) {
 
 	h := &Proxy{
 		db:       &MongoDB{db: db},
@@ -42,6 +44,7 @@ func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
 		counter:  counter.NewCounter(60),
 		throttle: make(chan struct{}),
 		lg:       lg,
+		reqLeft:  reqLeft,
 	}
 
 	// limits requests
@@ -50,6 +53,7 @@ func NewProxy(db *mgo.Collection, lg *zap.Logger) (*Proxy, error) {
 			if h.counter.Rate() < REQLIMIT {
 				h.throttle <- struct{}{}
 				h.counter.Incr()
+				reqLeft.Set(float64(5 - h.counter.Rate()))
 			}
 		}
 	}()
