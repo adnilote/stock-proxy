@@ -1,12 +1,12 @@
-Сервис для получения стоимости акций различных компаний по HTTP REST API.
+Stock market data by HTTP API - Alpha Vantage proxy
 
-Источника данных - Alpha Vantage.
-Документация: https://www.alphavantage.co/documentation/.
+Data source - Alpha Vantage.
+Documentation: https://www.alphavantage.co/documentation/.
 
-## Функции
-Параметры https://www.alphavantage.co/documentation/
+## Functions
+Parameters https://www.alphavantage.co/documentation/
 
-### Обязательные параметры:
+### Required parameters:
 - function
     стоимость за день, неделю, месяц.  
     function = {TIME_SERIES_INTRADAY, TIME_SERIES_DAILY, TIME_SERIES_DAILY_ADJUSTED, TIME_SERIES_WEEKLY, TIME_SERIES_WEEKLY_ADJUSTED, TIME_SERIES_MONTHLY, TIME_SERIES_MONTHLY_ADJUSTED}
