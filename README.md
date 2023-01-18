@@ -1,7 +1,10 @@
 Stock market data by HTTP API - Alpha Vantage proxy
 
 Data source - Alpha Vantage.
-Documentation: https://www.alphavantage.co/documentation/.
+Documentation used: https://www.alphavantage.co/documentation/.
+
+## Documentation
+https://godoc.org/github.com/adnilote/stock-proxy/proxy
 
 ## Functions
 Parameters https://www.alphavantage.co/documentation/
